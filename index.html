@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GEX Heatmap</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{--g:#1a7f37;--r:#b42318;--h:#6b5b00}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#111}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #ddd;padding:8px 10px 0}
+h1{font-size:16px;margin:0 0 6px}.tabs{display:flex;gap:4px;overflow-x:auto}
+.tab{flex:1;padding:9px 6px;border:1px solid #ccc;border-bottom:none;border-radius:8px 8px 0 0;background:#eee;font-weight:600;font-size:14px;cursor:pointer;min-width:64px}
+.tab.on{background:#fff;color:#000;border-color:#888}
+main{padding:10px;max-width:900px;margin:auto}
+.banner{color:#fff;border-radius:10px;padding:10px 12px;font-weight:700;font-size:17px;text-align:center}
+.why{font-size:13px;margin:6px 2px 10px;color:#333}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:7px 9px;font-size:12px}
+.card b{display:block;font-size:15px;margin-top:2px}
+.chg{font-size:12.5px;background:#fff8e1;border:1px solid #f0d98a;border-radius:8px;padding:7px 9px;margin-bottom:8px}
+#chart{background:#fff;border:1px solid #ddd;border-radius:8px}
+table{width:100%;border-collapse:collapse;background:#fff;font-size:12.5px;margin-top:10px}
+th,td{border:1px solid #ddd;padding:6px 4px;text-align:center}th{background:#eee}
+tr.all td{font-weight:700;background:#f2f2f2}td.pos{background:#d9f0d3}td.neg{background:#f8d0cc}
+.foot{font-size:11px;color:#555;margin:10px 2px 30px;line-height:1.45}
+.derived{background:#e8eefc;border:1px solid #9bb0e8;border-radius:8px;padding:6px 9px;font-size:12px;margin-bottom:8px}
+#status{font-size:11px;color:#666;padding:4px 0 6px}
+@media (max-width:480px){table{font-size:10.5px}th,td{padding:5px 2px}}
+</style></head><body>
+<header><h1>GEX Heatmap <span style="font-weight:400;color:#666;font-size:12px">· read-only</span></h1>
+<div class="tabs" id="tabs"></div><div id="status">loading…</div></header>
+<main id="main"><p>Loading…</p></main>
+<footer style="max-width:900px;margin:0 auto;padding:0 12px 28px;font-size:11px;color:#666;line-height:1.45"><b>Disclaimer:</b> Educational use only. Not investment advice. This is a dealer-positioning map, not a prediction. Data from Yahoo Finance, delayed and possibly incomplete; open interest updates once a day. Gamma/vanna are computed from chain implied volatility with Black-Scholes and standard dealer-positioning assumptions.</footer>
+<script>
+const TICKERS=['AMZN','SPY','QQQ','SPX'];let D=null,cur=localStorage.getItem('gexTab')||'AMZN';
+const $=s=>document.querySelector(s);
+const el=(tag,attrs={},txt)=>{const e=document.createElement(tag);Object.assign(e,attrs);if(txt!=null)e.textContent=txt;return e};
+const f=(x,d)=>x==null?'–':(d==null?(+x).toLocaleString('en-US',{maximumFractionDigits:2}):(+x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}));
+const sgn=(x,d=0)=>x==null?'–':(x>0?'+':'')+f(x,d);
+const money=m=>{const a=Math.abs(m);return (m<0?'−':'+')+'$'+(a>=1000?f(a/1000,2)+'B':f(a,0)+'M')};
+const et=iso=>new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+' ET';
+function tabs(){const t=$('#tabs');t.innerHTML='';TICKERS.forEach(k=>{const b=el('button',{className:'tab'+(k===cur?' on':'')},k==='SPX'?'SPX*':k);
+ b.onclick=()=>{cur=k;localStorage.setItem('gexTab',k);tabs();render()};t.appendChild(b)})}
+function changeText(T){const p=T.prev_summary,s=T.current;if(!p)return 'Change vs prior: first snapshot, nothing to compare yet.';
+ const a=p.aggregate,b=s.aggregate,o=[`net ${sgn(b.net_gex_m-a.net_gex_m)}M (${sgn((b.net_gex_m-a.net_gex_m)/100)}M per 1%)`];
+ for(const[k,l]of[['call_wall','call wall'],['put_wall','put wall'],['flip','flip']])if(a[k]!==b[k])o.push(`${l} ${f(a[k])}→${f(b[k])}`);
+ o.push(`spot ${sgn(s.spot-p.spot,2)}`);if(p.verdict&&p.verdict.verdict!==s.verdict.verdict)o.push(`verdict ${p.verdict.verdict}→${s.verdict.verdict}`);
+ return `Change vs ${et(p.timestamp)}: `+o.join(', ')}
+function render(){
+ const m=$('#main');m.innerHTML='';if(!D)return;const T=D.tickers[cur];
+ if(!T){m.appendChild(el('p',{},`No snapshot for ${cur} yet.`));return}
+ const s=T.current,v=s.verdict,a=s.aggregate;
+ const col={'BUY-THE-DIP':'var(--g)','SELL-THE-RIP':'var(--r)','HOLD':'var(--h)'}[v.verdict];
+ const bn=el('div',{className:'banner'},`${v.verdict} · trigger ${f(v.trigger)}`);bn.style.background=col;m.appendChild(bn);
+ m.appendChild(el('div',{className:'why'},`${v.regime}. ${v.why}; ${v.invalidation}.`));
+ if(s.derived_from)m.appendChild(el('div',{className:'derived'},`* SPX view is DERIVED from SPY: SPY strikes × ${s.scale} (SPX/SPY spot ratio). $ values are SPY's GEX. Levels are approximate, not real SPX strikes.`));
+ const g=el('div',{className:'meta'});
+ [['Spot',f(s.spot,2)],['Data as of',et(s.timestamp)],['Net GEX (spec)',money(a.net_gex_m)],['Net per 1% move',money(a.net_gex_m/100)],
+  ['Call wall / Put wall',`${f(a.call_wall)} / ${f(a.put_wall)}`],['Flip (cum. by strike)',f(a.flip,2)]].forEach(([k,x])=>{const c=el('div',{className:'card'},k);c.appendChild(el('b',{},x));g.appendChild(c)});
+ m.appendChild(g);m.appendChild(el('div',{className:'chg'},changeText(T)));
+ const ch=el('div',{id:'chart'});m.appendChild(ch);
+ // heatmap
+ const ex=s.expiries,ks=[...s.strikes].sort((x,y)=>x-y),lab=ks.map(k=>String(+k));
+ const keyOf=k=>{const ks2=Object.keys(s.cells_m);return ks2.find(z=>Math.abs(+z-k)<1e-6)};
+ const Z=ks.map(k=>ex.map(e=>s.cells_m[keyOf(k)][e]));
+ let vmax=0,mi=[0,0];Z.forEach((r,i)=>r.forEach((x,j)=>{if(x!=null&&Math.abs(x)>vmax){vmax=Math.abs(x);mi=[i,j]}}));
+ const txt=Z.map(r=>r.map(x=>x==null?'·':(Math.abs(x)>=10?f(x,0):f(x,1))));
+ const xl=ex.map(e=>new Date(e+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+ const byk=ks.map(k=>s.by_strike_m[Object.keys(s.by_strike_m).find(z=>Math.abs(+z-k)<1e-6)]);
+ let ns=0;ks.forEach((k,i)=>{if(Math.abs(k-s.spot)<Math.abs(ks[ns]-s.spot))ns=i});
+ const narrow=window.innerWidth<600;
+ const traces=[{type:'heatmap',x:xl,y:lab,z:Z,text:txt,texttemplate:'%{text}',textfont:{size:narrow?8.5:11},
+   colorscale:[[0,'#a50026'],[0.25,'#f46d43'],[0.5,'#ffffbf'],[0.75,'#66bd63'],[1,'#006837']],zmin:-vmax,zmax:vmax,zmid:0,
+   showscale:false,xgap:1,ygap:1,customdata:Z.map(r=>r.map(x=>x==null?null:x/100)),
+   hovertemplate:'Strike %{y} · %{x}<br>Net GEX %{z:,.1f}M<br>(per 1%%: %{customdata:,.2f}M)<extra></extra>'},
+  {type:'bar',orientation:'h',x:byk,y:lab,xaxis:'x2',yaxis:'y',marker:{color:byk.map(x=>x>0?'#1a9850':'#d73027')},
+   hovertemplate:'Strike %{y}<br>All expiries %{x:,.0f}M<extra></extra>'}];
+ const shapes=[{type:'rect',xref:'paper',yref:'y',x0:0,x1:1,y0:ns-0.5,y1:ns+0.5,line:{color:'#000',width:2,dash:'dash'}},
+  {type:'rect',xref:'x',yref:'y',x0:mi[1]-0.5,x1:mi[1]+0.5,y0:mi[0]-0.5,y1:mi[0]+0.5,line:{color:'blue',width:3}}];
+ const lay={height:Math.max(520,ks.length*(narrow?24:28)+90),margin:{l:narrow?48:60,r:6,t:46,b:28},
+  xaxis:{domain:[0,0.74],anchor:'y',anchor:'y',side:'top',tickfont:{size:narrow?10:12},fixedrange:true},
+  xaxis2:{domain:[0.77,1],anchor:'y',range:[-1.15*Math.max(...byk.map(Math.abs)),1.15*Math.max(...byk.map(Math.abs))],anchor:'y',side:'top',tickfont:{size:9},nticks:3,zeroline:true,fixedrange:true,title:{text:'All exp $M',font:{size:10}}},
+  yaxis:{type:'category',tickfont:{size:narrow?10:11},fixedrange:true,ticktext:lab.map((l,i)=>i===ns?'► '+l:l),tickvals:lab},
+  shapes,showlegend:false,paper_bgcolor:'#fff',plot_bgcolor:'#fff'};
+ Plotly.newPlot(ch,traces,lay,{displayModeBar:false,responsive:true});
+ // table
+ const tb=el('table');const hr=el('tr');['Expiry','Net $M','per 1%','Call wall','Put wall','Flip','Max pain','Exp move'].forEach(h=>hr.appendChild(el('th',{},h)));tb.appendChild(hr);
+ s.per_expiry.forEach(p=>{const r=el('tr');const em=p.exp_move;
+  [new Date(p.expiry+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}),sgn(p.net_gex_m),sgn(p.net_gex_m/100),f(p.call_wall),f(p.put_wall),p.flip==null?'–':f(p.flip,2),f(p.max_pain),
+   em?('±'+f(em.value,2)+(em.fallback_last?'*':'')):'–'].forEach((x,i)=>{const c=el('td',{},x);if(i===1)c.className=p.net_gex_m>0?'pos':'neg';r.appendChild(c)});tb.appendChild(r)});
+ const ra=el('tr',{className:'all'});['ALL',sgn(a.net_gex_m),sgn(a.net_gex_m/100),f(a.call_wall),f(a.put_wall),a.flip==null?'–':f(a.flip,2),'',''].forEach(x=>ra.appendChild(el('td',{},x)));tb.appendChild(ra);
+ const wrap=el('div');wrap.style.overflowX='auto';wrap.appendChild(tb);m.appendChild(wrap);
+ m.appendChild(el('div',{className:'foot'},`GEX = Black-Scholes gamma × OI × 100 × spot² (calls +, puts −), in $M, per spec. "per 1%" = value ÷ 100 (the common $-per-1%-move convention). r=${(s.r*100).toFixed(1)}%, q=${(s.q*100).toFixed(1)}%. Flip = cumulative GEX walking strikes low→high, crossing nearest spot. Dashed row/► = strike nearest spot; blue box = largest |cell|; · = no data; * = expected move from last trade (no bid/ask). VEX total ${money(a.vex_m)}. Skipped ${s.skipped_rows.length} rows (missing OI/IV). Source: Yahoo Finance; OI updates once a day. Positioning map, not a prediction. Gamma rolls off into expiry.`));
+}
+async function load(){try{const r=await fetch('./data.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);D=await r.json();
+ $('#status').textContent='Checked '+new Date().toLocaleTimeString('en-US',{timeZone:'America/New_York'})+' ET · published '+(D.served_at?et(D.served_at):'–')+' · refreshes every 60s';render()}
+ catch(e){$('#status').textContent='Refresh failed ('+e.message+'), retrying in 60s'}}
+tabs();load();setInterval(load,60000);
+</script></body></html>
