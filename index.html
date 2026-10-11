@@ -8,7 +8,8 @@
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#111}
 header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #ddd;padding:8px 10px 0}
 h1{font-size:16px;margin:0 0 6px}.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}.tabs::-webkit-scrollbar{display:none}
-.tab{flex:0 0 auto;padding:9px 12px;border:1px solid #ccc;border-bottom:none;border-radius:8px 8px 0 0;background:#eee;font-weight:600;font-size:14px;cursor:pointer;min-width:58px;white-space:nowrap}
+.tab{flex:1 0 auto;padding:9px 10px;border:1px solid #ccc;border-bottom:none;border-radius:8px 8px 0 0;background:#eee;font-weight:600;font-size:14px;cursor:pointer;min-width:58px;white-space:nowrap}
+.groups{display:flex;gap:6px;margin-bottom:6px}.grp{flex:1;padding:7px 4px;border:1px solid #bbb;border-radius:16px;background:#f3f3f3;font-size:13px;font-weight:600;cursor:pointer;color:#333}.grp.on{background:#222;color:#fff;border-color:#222}
 .tab.on{background:#fff;color:#000;border-color:#888}
 main{padding:10px;max-width:900px;margin:auto}
 .banner{color:#fff;border-radius:10px;padding:10px 12px;font-weight:700;font-size:17px;text-align:center}
@@ -27,18 +28,21 @@ tr.all td{font-weight:700;background:#f2f2f2}td.pos{background:#d9f0d3}td.neg{ba
 @media (max-width:480px){table{font-size:10.5px}th,td{padding:5px 2px}}
 </style></head><body>
 <header><h1>GEX Heatmap <span style="font-weight:400;color:#666;font-size:12px">· read-only</span></h1>
-<div class="tabs" id="tabs"></div><div id="status">loading…</div></header>
+<div class="groups" id="groups"></div><div class="tabs" id="tabs"></div><div id="status">loading…</div></header>
 <main id="main"><p>Loading…</p></main>
 <footer style="max-width:900px;margin:0 auto;padding:0 12px 28px;font-size:11px;color:#666;line-height:1.45"><b>Disclaimer:</b> Educational use only. Not investment advice. This is a dealer-positioning map, not a prediction. Data from Yahoo Finance, delayed and possibly incomplete; open interest updates once a day. Gamma/vanna are computed from chain implied volatility with Black-Scholes and standard dealer-positioning assumptions.</footer>
 <script>
-const TICKERS=['AMZN','SPY','QQQ','SPX','AAPL','GOOGL','TSLA'];let D=null,cur=localStorage.getItem('gexTab')||'AMZN';
+const GROUPS={Index:['SPY','QQQ','SPX'],Mag:['AMZN','AAPL','GOOGL','TSLA'],Semis:['NVDA','AMD','AVGO','TSM','MU','SMH']};const TICKERS=[].concat(...Object.values(GROUPS));let D=null,cur=localStorage.getItem('gexTab')||'AMZN';
 const $=s=>document.querySelector(s);
 const el=(tag,attrs={},txt)=>{const e=document.createElement(tag);Object.assign(e,attrs);if(txt!=null)e.textContent=txt;return e};
 const f=(x,d)=>x==null?'–':(d==null?(+x).toLocaleString('en-US',{maximumFractionDigits:2}):(+x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}));
 const sgn=(x,d=0)=>x==null?'–':(x>0?'+':'')+f(x,d);
 const money=m=>{const a=Math.abs(m);return (m<0?'−':'+')+'$'+(a>=1000?f(a/1000,2)+'B':f(a,0)+'M')};
 const et=iso=>new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+' ET';
-function tabs(){const t=$('#tabs');t.innerHTML='';TICKERS.forEach(k=>{const b=el('button',{className:'tab'+(k===cur?' on':'')},k==='SPX'?'SPX*':k);
+function grpOf(k){return Object.keys(GROUPS).find(g=>GROUPS[g].includes(k))||'Index'}
+function tabs(){if(!TICKERS.includes(cur))cur='AMZN';const gr=$('#groups');gr.innerHTML='';const g0=grpOf(cur);
+ Object.keys(GROUPS).forEach(g=>{const b=el('button',{className:'grp'+(g===g0?' on':'')},g);b.onclick=()=>{if(g!==g0){cur=GROUPS[g][0];localStorage.setItem('gexTab',cur);tabs();render()}};gr.appendChild(b)});
+ const t=$('#tabs');t.innerHTML='';GROUPS[g0].forEach(k=>{const b=el('button',{className:'tab'+(k===cur?' on':'')},k==='SPX'?'SPX*':k);
  b.onclick=()=>{cur=k;localStorage.setItem('gexTab',k);tabs();render()};t.appendChild(b);if(k===cur)setTimeout(()=>b.scrollIntoView({inline:'center',block:'nearest'}),0)})}
 function changeText(T){const p=T.prev_summary,s=T.current;if(!p)return 'Change vs prior: first snapshot, nothing to compare yet.';
  const a=p.aggregate,b=s.aggregate,o=[`net ${sgn(b.net_gex_m-a.net_gex_m)}M (${sgn((b.net_gex_m-a.net_gex_m)/100)}M per 1%)`];
